@@ -3,7 +3,7 @@ module CertificateHelper
   def generate_cert_with_expiry(expiry, cn = "GENERATED TEST CERTIFICATE")
     generate_cert_and_key(expiry, cn)[0]
   end
-  
+
   def generate_cert(cn = "GENERATED TEST CERTIFICATE")
     generate_cert_and_key((Time.now+60*60*24*365), cn)[0]
   end

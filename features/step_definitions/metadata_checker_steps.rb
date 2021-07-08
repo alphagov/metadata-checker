@@ -33,15 +33,25 @@ Given(/^the following certificates are defined in metadata:$/) do |table|
   end
   table.hashes.each do |ent|
     pki = PKIS.fetch(ent["pki"])
-    if ent["status"] == "expired"
+
+    key = nil
+    case ent["status"]
+    when "expired"
       cert = pki.generate_cert_with_expiry(Time.now-(60*60*24*15), "EXPIRED CERT")
+    when "selfsigned"
+      pair = pki.generate_cert_and_key(Time.now+(60*60*24*365), "SELF_SIGNED_CERT")
+      cert = pair[0]
+      key = pair[1]
     else
       cert = pki.generate_cert
     end
-    signed_cert = pki.sign(cert)
+
+    signed_cert = pki.sign(cert, key)
+
     if ent["status"] == "revoked"
       pki.revoke(signed_cert)
     end
+
     cert_value = pki.inline_pem(signed_cert)
     metadata_entries[ent.fetch("entity_id")] << { :key_name => ent['key_name'], :cert_value => cert_value}
   end

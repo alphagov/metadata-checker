@@ -36,17 +36,20 @@ class PKI
     @serial_count += 1
   end
 
-  def sign(cert)
-    cert.issuer = @root_ca.subject # root CA is the issuer
+  def sign(cert, key = nil)
+    selfsign = !key.nil?
+    cert.issuer = selfsign ? cert.subject : @root_ca.subject
     cert.serial = take_next_serial
     ef = OpenSSL::X509::ExtensionFactory.new
     ef.subject_certificate = cert
-    ef.issuer_certificate = root_ca
+    ef.issuer_certificate = selfsign ? cert : root_ca
     cert.add_extension(ef.create_extension("keyUsage","digitalSignature", true))
     cert.add_extension(ef.create_extension("subjectKeyIdentifier","hash",false))
-    ocsp_extension = ef.create_extension("authorityInfoAccess","OCSP;URI:#{@ocsp_host.to_s}")
-    cert.add_extension(ocsp_extension)
-    cert.sign(@root_key, OpenSSL::Digest::SHA256.new)
+    unless selfsign
+      ocsp_extension = ef.create_extension("authorityInfoAccess","OCSP;URI:#{@ocsp_host.to_s}")
+      cert.add_extension(ocsp_extension)
+    end
+    cert.sign(selfsign ? key : @root_key, OpenSSL::Digest::SHA256.new)
     cert
   end
 

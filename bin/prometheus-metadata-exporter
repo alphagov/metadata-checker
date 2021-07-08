@@ -83,7 +83,7 @@ end
 
 # ocsp - same as ExpiryDateMetric but 0 (fail) or 1 (pass)
 class OcspCheckMetric < Prometheus::Client::Gauge
-  def initialize(metadata_url, ca_files)
+  def initialize(metadata_url, ca_files, allow_self_signed)
     super(:verify_metadata_certificate_ocsp_success, "If a cert chain validation and OCSP check of the given X.509 SAML certificate is good (1) or bad (0)")
     @metadata_url = metadata_url
     @ca_files = ca_files
@@ -91,6 +91,7 @@ class OcspCheckMetric < Prometheus::Client::Gauge
     @parser = Metadata::SAML::Parser.new
     @certificate_factory = Metadata::Certificate::CertificateFactory.new
     @pem_checker = Metadata::Ocsp::PemChecker.new
+    @allow_self_signed = allow_self_signed
   end
   def values
     # we're being scraped
@@ -101,7 +102,7 @@ class OcspCheckMetric < Prometheus::Client::Gauge
     document = @metadata_client.get(@metadata_url, false)
 
     # these are all the certs served from the metadata
-    check_and_set(gauge, @parser.certificate_identities(document), @ca_files)
+    check_and_set(gauge, @parser.certificate_identities(document), @ca_files, @allow_self_signed)
 
     # this is the cert used to sign the metadata document itself
     check_and_set(gauge, @parser.signing_certificate(document), @ca_files)
@@ -112,15 +113,14 @@ class OcspCheckMetric < Prometheus::Client::Gauge
 
   private
 
-  def check_and_set(gauge, certificate_identities, ca_files)
+  def check_and_set(gauge, certificate_identities, ca_files, allow_self_signed = false)
       return if certificate_identities.nil?
 
       pems = certificate_identities.keys
-      ocsp_results = @pem_checker.check_pems(pems, ca_files)
+      ocsp_results = @pem_checker.check_pems(pems, ca_files, allow_self_signed)
       certificate_identities.map do |pem, identities|
         identities.map do |identity|
           cert = @certificate_factory.from_inline_pem(pem)
-
           ocsp_result = ocsp_results[pem].revoked? ? 0 : 1
 
           unless ocsp_results[pem].unknown?
@@ -141,14 +141,16 @@ class PrometheusMetadataExporter
   option :port, :short => '-p PORT', required: false, default: 9199, description: "Port to listen on (default 9199)"
   option :metadata_url, :short => '-m METADATA_URL', required: true, description: "URL to fetch metadata from"
   option :ca_file_list, :long => '--cas DIR', required: true, description: "Directory containing CA certificate files in PEM format"
+  option :allow_self_signed, :long => '--allow_self_signed', required: false, boolean: true, description: "Set true to skip OCSP checks for self signed certificates."
 
   def gogogo
+    allow_self_signed = config[:allow_self_signed]
     dir = config[:ca_file_list]
     ca_file_list = Dir.children(dir).collect{|name| File.join(dir,name)}
 
     Prometheus::Client::registry.register(ExpiryDateMetric.new(config[:metadata_url]))
     Prometheus::Client::registry.register(ValidUntilMetric.new(config[:metadata_url]))
-    Prometheus::Client::registry.register(OcspCheckMetric.new(config[:metadata_url], ca_file_list))
+    Prometheus::Client::registry.register(OcspCheckMetric.new(config[:metadata_url], ca_file_list, allow_self_signed))
   end
 end
 

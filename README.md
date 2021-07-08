@@ -12,7 +12,7 @@ Install it yourself as:
 
 To generate a package for metadata-exporter:
 
-    docker build
+    docker build ./
 
 Then upload the image to the desired repository.
 
@@ -20,7 +20,11 @@ Then upload the image to the desired repository.
 
 To run the prometheus exporter:
 
-    bundle exec bin/prometheus-metadata-exporter -m METADATA_URL --cas DIRECTORY_OF_CA_CERTIFICATE_FILES
+    bundle exec bin/prometheus-metadata-exporter -m METADATA_URL --cas DIRECTORY_OF_CA_CERTIFICATE_FILES [--allow_self_signed]
+    
+The directory of DIRECTORY_OF_CA_CERTS should contain the certificate chains for the metadata signing cert as well as any signing and encryption certs within the SAML.
+
+Self-signed certs do not need a chain, but you should provide the optional `--allow_self_signed` parameter.
 
 The following metrics are exported:
 
