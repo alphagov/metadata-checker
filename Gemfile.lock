@@ -67,7 +67,7 @@ GEM
       r509
       rake
       redis
-    rack (2.0.6)
+    rack (2.2.3)
     rack-protection (2.0.5)
       rack
     rake (10.5.0)
