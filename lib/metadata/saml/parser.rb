@@ -34,13 +34,21 @@ module Metadata
         nil
       end
 
-    def valid_until(document)
-      # grafana prefers timestamps to be in milliseconds :(
-      # EntitiesDescriptor for hub federation metadata, EntityDescriptor for eidas metadata
-      attribute = document.xpath("./md:EntitiesDescriptor/@validUntil", "md" => "urn:oasis:names:tc:SAML:2.0:metadata").first ||
-                   document.xpath("./md:EntityDescriptor/@validUntil", "md" => "urn:oasis:names:tc:SAML:2.0:metadata").first
-      Time.parse(attribute.value).to_f*1000
-    end
+      def valid_until(document)
+        # grafana prefers timestamps to be in milliseconds :(
+        # EntitiesDescriptor for hub federation metadata, EntityDescriptor for eidas metadata
+        attribute = document.xpath("./md:EntitiesDescriptor/@validUntil", "md" => "urn:oasis:names:tc:SAML:2.0:metadata").first ||
+                     document.xpath("./md:EntityDescriptor/@validUntil", "md" => "urn:oasis:names:tc:SAML:2.0:metadata").first
+        Time.parse(attribute.value).to_f*1000
+      end
+
+      def all_entity_certificates(document)
+        document.xpath(
+          './/md:EntityDescriptor//ds:X509Certificate',
+          md: "urn:oasis:names:tc:SAML:2.0:metadata",
+          ds: "http://www.w3.org/2000/09/xmldsig#"
+        ).map { |element| element.text }
+      end
     end
   end
 end

@@ -18,7 +18,7 @@ Feature: OCSP checks certificates in metadata
       | bar       | bar_key_1 | TEST_PKI_ONE | good   |
     And there is metadata at http://localhost:53000
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53000 --cas tmp/aruba/ -p 2020"
+    When I start the metadata checker with the arguments "-m http://localhost:53000 --cas tmp/aruba/ -p 2020 -e test"
     Then the metrics on port 2020 should contain exactly:
     """
     verify_metadata_certificate_ocsp_success{entity_id="foo",use="encryption",serial="2",subject="/DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE"} 1.0
@@ -37,7 +37,7 @@ Feature: OCSP checks certificates in metadata
       | bar       | bar_key_1 | TEST_PKI_ONE | revoked |
     Given there is metadata at http://localhost:53001
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53001 --cas tmp/aruba/ -p 2021"
+    When I start the metadata checker with the arguments "-m http://localhost:53001 --cas tmp/aruba/ -p 2021 -e test"
     Then the metrics on port 2021 should contain exactly:
     """
     verify_metadata_certificate_ocsp_success{entity_id="foo",use="encryption",serial="2",subject="/DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE"} 1.0
@@ -57,7 +57,7 @@ Feature: OCSP checks certificates in metadata
       | bar       | bar_key_1 | TEST_PKI_TWO | good   |
     And there is metadata at http://localhost:53002
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53002 --cas tmp/aruba/ -p 2022"
+    When I start the metadata checker with the arguments "-m http://localhost:53002 --cas tmp/aruba/ -p 2022 -e test"
     Then the metrics on port 2022 should contain exactly:
     """
     verify_metadata_certificate_ocsp_success{entity_id="foo",use="encryption",serial="2",subject="/DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE"} 1.0
@@ -76,7 +76,7 @@ Feature: OCSP checks certificates in metadata
     And the metadata is signed by a certificate belonging to SIGNING_PKI_ONE
     And there is metadata at http://localhost:53003
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53003 --cas tmp/aruba/ -p 2023"
+    When I start the metadata checker with the arguments "-m http://localhost:53003 --cas tmp/aruba/ -p 2023 -e test"
     Then the metrics on port 2023 should contain exactly:
     """
     verify_metadata_certificate_ocsp_success{entity_id="foo",use="encryption",serial="2",subject="/DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE"} 1.0
@@ -94,7 +94,7 @@ Feature: OCSP checks certificates in metadata
     And the metadata is signed by a revoked certificate belonging to SIGNING_PKI_ONE
     And there is metadata at http://localhost:53004
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53004 --cas tmp/aruba/ -p 2024"
+    When I start the metadata checker with the arguments "-m http://localhost:53004 --cas tmp/aruba/ -p 2024 -e test"
     Then the metrics on port 2024 should contain exactly:
     """
     verify_metadata_certificate_ocsp_success{entity_id="foo",use="encryption",serial="2",subject="/DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE"} 1.0

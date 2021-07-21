@@ -7,9 +7,11 @@ require 'metadata/expiry/certificate_result'
 require 'metadata/ocsp/pem_checker'
 require 'metadata/saml/parser'
 require 'metadata/saml/client'
+require 'metadata/sources/client'
 require 'mixlib/cli'
 require 'prometheus/middleware/exporter'
 require 'sinatra/base'
+require 'yaml'
 
 class ValidUntilMetric < Prometheus::Client::Gauge
   def initialize(metadata_url)
@@ -18,6 +20,7 @@ class ValidUntilMetric < Prometheus::Client::Gauge
     @metadata_client = Metadata::SAML::Client.new
     @parser = Metadata::SAML::Parser.new
   end
+
   def values
     # we're being scraped
 
@@ -30,7 +33,7 @@ class ValidUntilMetric < Prometheus::Client::Gauge
 
     gauge.set({ metadata: @metadata_url }, valid_until)
 
-    # return the metrics to prometheus
+    # return the metrics to prometheus
     return gauge.values
   end
 end
@@ -43,6 +46,7 @@ class ExpiryDateMetric < Prometheus::Client::Gauge
     @parser = Metadata::SAML::Parser.new
     @certificate_factory = Metadata::Certificate::CertificateFactory.new
   end
+
   def values
     # we're being scraped
 
@@ -58,22 +62,22 @@ class ExpiryDateMetric < Prometheus::Client::Gauge
     signing_cert = @parser.signing_certificate(document)
     check_and_set(gauge, signing_cert) unless signing_cert.nil?
 
-    # return the metrics to prometheus
+    # return the metrics to prometheus
     return gauge.values
   end
 
   private
 
   def check_and_set(gauge, certificate_identities)
-    certificate_identities.each do | pem, entity |
+    certificate_identities.each do |pem, entity|
       cert = @certificate_factory.from_inline_pem(pem)
       # grafana prefers timestamps to be in milliseconds :(
       not_on_or_after = cert.not_after.to_time.to_f * 1000
       entity.each do |e|
-        gauge.set({     entity_id: e[:entity_id],
-                        use: e[:key_use],
-                        serial: cert.serial,
-                        subject: cert.subject,
+        gauge.set({ entity_id: e[:entity_id],
+                    use: e[:key_use],
+                    serial: cert.serial,
+                    subject: cert.subject,
                   }, not_on_or_after)
       end
     end
@@ -92,6 +96,7 @@ class OcspCheckMetric < Prometheus::Client::Gauge
     @certificate_factory = Metadata::Certificate::CertificateFactory.new
     @pem_checker = Metadata::Ocsp::PemChecker.new
   end
+
   def values
     # we're being scraped
 
@@ -106,32 +111,68 @@ class OcspCheckMetric < Prometheus::Client::Gauge
     # this is the cert used to sign the metadata document itself
     check_and_set(gauge, @parser.signing_certificate(document), @ca_files)
 
-    # return the metrics to prometheus
+    # return the metrics to prometheus
     return gauge.values
   end
 
   private
 
   def check_and_set(gauge, certificate_identities, ca_files)
-      return if certificate_identities.nil?
+    return if certificate_identities.nil?
 
-      pems = certificate_identities.keys
-      ocsp_results = @pem_checker.check_pems(pems, ca_files)
-      certificate_identities.map do |pem, identities|
-        identities.map do |identity|
-          cert = @certificate_factory.from_inline_pem(pem)
+    pems = certificate_identities.keys
+    ocsp_results = @pem_checker.check_pems(pems, ca_files)
+    certificate_identities.map do |pem, identities|
+      identities.map do |identity|
+        cert = @certificate_factory.from_inline_pem(pem)
 
-          ocsp_result = ocsp_results[pem].revoked? ? 0 : 1
+        ocsp_result = ocsp_results[pem].revoked? ? 0 : 1
 
-          unless ocsp_results[pem].unknown?
-            gauge.set({    entity_id: identity.entity_id,
-                           use: identity.key_use,
-                           serial: cert.serial,
-                           subject: cert.subject,
-                      }, ocsp_result)
-          end
+        unless ocsp_results[pem].unknown?
+          gauge.set({ entity_id: identity.entity_id,
+                      use: identity.key_use,
+                      serial: cert.serial,
+                      subject: cert.subject,
+                    }, ocsp_result)
         end
       end
+    end
+  end
+end
+
+class SourcesMetric < Prometheus::Client::Gauge
+  def initialize(metadata_url, environment)
+    super(:verify_metadata_sources_check, "If the sources match the deployed metadata. Value is the number of different certs. Labels show which certs were unexpected and where they were found.")
+    @metadata_url = metadata_url
+    @metadata_client = Metadata::SAML::Client.new
+    @github_sources_client = Metadata::Sources::Client.new(ENV['GITHUB_API_TOKEN'], environment)
+    @parser = Metadata::SAML::Parser.new
+    @cert_factory = Metadata::Certificate::CertificateFactory.new
+  end
+
+  def values
+    gauge = Prometheus::Client::Gauge.new(name, docstring)
+    check_and_set(
+      gauge,
+      @github_sources_client.get,
+      @parser.all_entity_certificates(@metadata_client.get(@metadata_url, false))
+    )
+    # return the metrics to prometheus
+    return gauge.values
+  end
+
+  private
+
+  def check_and_set(gauge, source_certs, published_certs)
+    source_certs_not_in_published = (source_certs - published_certs).map { |cert| @cert_factory.from_inline_pem(cert).subject.to_s }
+    published_certs_not_in_source = (published_certs - source_certs).map { |cert| @cert_factory.from_inline_pem(cert).subject.to_s }
+
+    gauge.set({
+                source_certs_not_in_published: source_certs_not_in_published.join(', '),
+                published_certs_not_in_source: published_certs_not_in_source.join(', '),
+              },
+              source_certs_not_in_published.length + published_certs_not_in_source.length
+    )
   end
 end
 
@@ -140,15 +181,17 @@ class PrometheusMetadataExporter
 
   option :port, :short => '-p PORT', required: false, default: 9199, description: "Port to listen on (default 9199)"
   option :metadata_url, :short => '-m METADATA_URL', required: true, description: "URL to fetch metadata from"
+  option :environment, :short => '-e ENVIRONMENT', required: true, description: "The environment (staging, integration, prod)"
   option :ca_file_list, :long => '--cas DIR', required: true, description: "Directory containing CA certificate files in PEM format"
 
   def gogogo
     dir = config[:ca_file_list]
-    ca_file_list = Dir.children(dir).collect{|name| File.join(dir,name)}
+    ca_file_list = Dir.children(dir).collect { |name| File.join(dir, name) }
 
     Prometheus::Client::registry.register(ExpiryDateMetric.new(config[:metadata_url]))
     Prometheus::Client::registry.register(ValidUntilMetric.new(config[:metadata_url]))
     Prometheus::Client::registry.register(OcspCheckMetric.new(config[:metadata_url], ca_file_list))
+    Prometheus::Client::registry.register(SourcesMetric.new(config[:metadata_url], config[:environment]))
   end
 end
 

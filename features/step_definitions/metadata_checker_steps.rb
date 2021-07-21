@@ -119,7 +119,7 @@ end
 # http://fractio.nl/2010/09/14/testing-daemons-with-cucumber/
 When /^I start the prometheus client on port (\d+) with metadata on port (\d+) with ca (.*)$/ do |pcport, mport, ca_file|
   @root = Pathname.new(File.dirname(__FILE__)).parent.parent.expand_path
-  command = "#{@root.join('bin')}/prometheus-metadata-exporter -p #{pcport} -m http://localhost:#{mport} --cas tmp/aruba/"
+  command = "#{@root.join('bin')}/prometheus-metadata-exporter -p #{pcport} -m http://localhost:#{mport} --cas tmp/aruba/ -e test"
 
   @pipe = IO.popen(command, "r")
   sleep 2 # so the daemon has a chance to boot

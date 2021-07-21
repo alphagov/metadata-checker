@@ -75,6 +75,30 @@ module Metadata
           expect(certificate_identities).to eq expected_identities
         end
       end
+
+      context '#all_entity_certificates' do
+        it 'returns all the certificates' do
+          foo_cert_1 = "FOOCERT1"
+          foo_cert_2 = "FOOCERT2"
+          bar_cert_1 = "BARCERT1"
+
+          metadata_entries = {
+            "foo_id" => [
+              {:key_name => "foo_1", :cert_value => foo_cert_1},
+              {:key_name => "foo_2", :cert_value => foo_cert_2},
+            ],
+            "bar_id" => [
+              {:key_name => "bar_1", :cert_value => bar_cert_1},
+            ]
+          }
+
+          metadata = build_metadata(metadata_entries)
+          doc = Nokogiri::XML(metadata)
+
+          certs = Parser.new.all_entity_certificates(doc)
+          expect(certs).to eq([foo_cert_1, foo_cert_2, bar_cert_1])
+        end
+      end
     end
   end
 end

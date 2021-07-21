@@ -18,7 +18,7 @@ Feature: expiry of certificates in metadata is checked
       | bar       | bar_key_1 | TEST_PKI_ONE | good   |
     And there is metadata at http://localhost:53010
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53010 --cas tmp/aruba/ -p 2030"
+    When I start the metadata checker with the arguments "-m http://localhost:53010 --cas tmp/aruba/ -p 2030 -e test"
     Then the metrics on port 2030 should contain certificate expires exactly:
       | entity_id | serial | subject                                       | status |
       | foo       | 2      | /DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE | good   |
@@ -36,7 +36,7 @@ Feature: expiry of certificates in metadata is checked
       | bar       | bar_key_1 | TEST_PKI_ONE | expired |
     Given there is metadata at http://localhost:53013
     And there is an OCSP responder
-    When I start the metadata checker with the arguments "-m http://localhost:53013 --cas tmp/aruba/ -p 2033"
+    When I start the metadata checker with the arguments "-m http://localhost:53013 --cas tmp/aruba/ -p 2033 -e test"
     Then the metrics on port 2033 should contain certificate expires exactly:
       | entity_id | serial | subject                                       | status  |
       | foo       | 2      | /DC=org/DC=TEST/CN=GENERATED TEST CERTIFICATE | good    |
